@@ -1,21 +1,14 @@
 from dash import Dash, html, dcc, Input, Output
 import plotly.express as px
 import pandas as pd
+import numpy as np
 
 app = Dash(__name__)
 
 sales = pd.read_csv("data/daily_sales_compiled.csv")
 
 # The unique elements in the data sets are: 'pink morsel', 'gold morsel' 'magenta morsel' 'chartreuse morsel'
-# 'periwinkle morsel' 'vermilion morsel' and 'lapis morsel' This needs a bit of reworking once I am more familiar
-# with pandas but for now, I will filter all the morsel into their respective colors
-
-pink = sales[(sales['product'] == 'pink morsel')]
-gold = sales[(sales['product'] == 'gold morsel')]
-chartreuse = sales[(sales['product'] == 'chartreuse morsel')]
-periwinkle = sales[(sales['product'] == 'periwinkle morsel')]
-vermilion = sales[(sales['product'] == 'vermilion morsel')]
-lapis = sales[(sales['product'] == 'lapis morsel')]
+# 'periwinkle morsel' 'vermilion morsel' and 'lapis morsel'
 
 app.layout = html.Div(children=[
     html.H1(
@@ -23,7 +16,13 @@ app.layout = html.Div(children=[
     ),
 
     html.Div(
-        children=' By Roy Lim',
+        children=' By Roy Lim'
+    ),
+    html.H2(
+        children='On the following dashboard, please choose two different products to compare with.'
+    ),
+    html.Div(
+        children='The vertical, black line denotes when the Pink Morsel`s price was increased',
         style={
             'margin-bottom': '2rem'
         }
@@ -38,7 +37,7 @@ app.layout = html.Div(children=[
             )
         ],
             style={
-                "width": '33%',
+                "width": '24%',
                 'display': 'inline-block'
             }
         ),
@@ -50,39 +49,98 @@ app.layout = html.Div(children=[
             )
         ],
             style={
-                "width": '33%',
+                "width": '24%',
                 'display': 'inline-block'
             }
         ),
 
         html.Div([
             dcc.Dropdown(
-                ["price", "quantity", "total (price * quantity)"],
-                'price',
+                ["price", "quantity"],
+                'quantity',
                 id="data_type"
             )
         ],
             style={
-                "width": '33%',
+                "width": '24%',
+                'display': 'inline-block'
+            }
+        ),
+        html.Div([
+            dcc.Dropdown(
+                np.append('all regions', sales["region"].unique()),
+                'all regions',
+                id="region"
+            )
+        ],
+            style={
+                "width": '24%',
                 'display': 'inline-block'
             }
         ),
 
-        dcc.Graph(id='indicator-graphic')
+        dcc.Graph(id='raw-graphic'),
+
+        dcc.Graph(id='averaged-graphic')
     ])
 
 ])
 
+
+# Raw Data
 @app.callback(
-    Output('indicator-graphic', 'figure'),
+    Output('raw-graphic', 'figure'),
     Input('product1', 'value'),
     Input('product2', 'value'),
-    Input('data_type', 'value'))
-def update_graph(product1, product2, data_type):
+    Input('data_type', 'value'),
+    Input('region', 'value'))
+def update_graph(product1, product2, data_type, region):
     prod1 = sales[(sales['product'] == product1)]
     prod2 = sales[(sales['product'] == product2)]
-    fig = px.line(prod1, x="date", y='price', title=data_type + " vs time")
-    fig.add_scatter(x=prod2['date'], y=prod2['price'])
+
+    # Filter based on region
+    if region != 'all regions':
+        prod1 = prod1[(prod1['region'] == region)]
+        prod2 = prod2[(prod2['region'] == region)]
+
+    # Add a scatter graph to plot
+    fig = px.scatter(pd.concat([prod1, prod2]), x='date', y=data_type, title=data_type + " vs time", color='product')
+
+    # Adding Legend
+    fig.update_layout(showlegend=True)
+    # Adding a vertical line for where the price change has occurred
+    fig.add_vline(x="2021-01-14")
+    return fig
+
+
+# Raw Data
+@app.callback(
+    Output('averaged-graphic', 'figure'),
+    Input('product1', 'value'),
+    Input('product2', 'value'),
+    Input('data_type', 'value'),
+    Input('region', 'value'))
+def update_graph(product1, product2, data_type, region):
+    prod1 = sales[(sales['product'] == product1)]
+    prod2 = sales[(sales['product'] == product2)]
+
+    # Filter based on region
+    if region != 'all regions':
+        prod1 = prod1[(prod1['region'] == region)]
+        prod2 = prod2[(prod2['region'] == region)]
+
+    if data_type == 'quantity':
+        # Group by date and take the average
+        prod1 = prod1.groupby("date").mean(numeric_only=True)
+        prod2 = prod2.groupby("date").mean(numeric_only=True)
+
+    # Add a scatter graph to plot
+    fig = px.scatter(pd.concat([prod1, prod2]), x='date', y=data_type, title=data_type + " vs time", color='product')
+
+    # Adding Legend
+    fig.update_layout(showlegend=True)
+    # Adding a vertical line for where the price change has occurred
+    fig.add_vline(x="2021-01-14")
     return fig
 
 
